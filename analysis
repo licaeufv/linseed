@@ -1,0 +1,76 @@
+# Data
+data1=read.table("linseed.txt",h=T)
+
+# Names of variables
+Variable=noquote(colnames(data1)[-c(1:4)])
+
+# Season
+Season=unique(data1[,2])[order(unique(data1[,2]))]
+
+# Packages
+library(MCMCglmm)
+library(coda)
+
+# Quantities required for Bayesian analysis
+nIter=300000 # Number of iterations
+BurnIn=20000 # Number of Burn-in
+thin=5 # Number of thin
+
+beta_e=NULL
+alpha_e=NULL
+beta_1=NULL
+alpha_1=NULL
+beta_2=NULL
+alpha_2=NULL
+
+for(i in 1:length(Season)){ # Looping for season
+data=data1[data1[,2]==Season[i],]
+for(j in 1:length(Variable)){ # Looping for variable
+
+# Data for ith season and jth variable (phenotype,block and genotypes)
+y=data[,j+4]
+data_analysis=data.frame(y=y,BLOCK=factor(data[,4]),GEN=factor(data[,3]))
+
+if(i==1){
+# Hyperparameters for the first season
+beta_e[i]=10^8
+alpha_e[i]=0.001
+beta_1[i]=10^8
+alpha_1[i]=0.001
+beta_2[i]=10^8
+alpha_2[i]=0.001}
+
+if(i!=1){
+mode=posterior.mode(fit$VCV)
+chain=fit$VCV
+
+# Hyperparameters for the others seasons
+Mo_1=mode[1,]
+M_1=mean(chain[,1])
+alpha_1=(2*(Mo_1+M_1))/(M_1-Mo_1)
+beta_1=M_1*((alpha_1-2)/alpha_1)
+
+Mo_2=mode[2,]
+M_2=mean(chain[,2])
+alpha_2=(2*(Mo_2+M_2))/(M_2-Mo_2)
+beta_2=M_2*((alpha_2-2)/alpha_2)
+
+Mo_e=mode[3,]
+M_e=mean(chain[,3])
+alpha_e=(2*(Mo_e+M_e))/(M_e-Mo_e)
+beta_e=M_e*((alpha_e-2)/alpha_e)
+}
+
+# Definition of prior distribution
+prior=list(R=list(V=beta_e[i], nu=alpha_e[i]), G=list(G1=list(V=beta_1[i], nu=alpha_1[i]),G2=list(V=beta_2[i], nu=alpha_2[i])))
+
+# Analysis
+fit=MCMCglmm(y~1,random=~BLOCK+GEN,prior=prior,data=data_analysis,family = c("gaussian"), nitt=nIter, thin=thin, burnin=BurnIn, verbose=FALSE,
+pr=T,singular.ok=TRUE)
+
+print(summary(fit))
+}}
+
+
+
+
